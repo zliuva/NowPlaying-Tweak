@@ -11,15 +11,12 @@ static NSDictionary *_info;
 static enum TitleType {
 	TITLE_TITLE = 0,
 	TITLE_ARTIST,
-	TITLE_TIME
+	TITLE_TIME,
+	TITLE_LAST
 } _type = TITLE_TITLE;
 
 static void updateTitle(CFRunLoopTimerRef timer, void *info) {
-	_type++;
-
-	if (_type > TITLE_TIME) {
-		_type = TITLE_TITLE;
-	}
+	_type = (_type + 1) % TITLE_LAST;
 
 	switch (_type) {
 		case TITLE_TITLE:
