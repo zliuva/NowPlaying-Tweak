@@ -1,7 +1,7 @@
 Package: com.softboysxp.nowplaying
 Name: NowPlaying on Status Bar
 Depends: mobilesubstrate,firmware (>= 6.0.0)
-Version: 1.0.0
+Version: 1.1.0
 Architecture: iphoneos-arm
 Description: Display currently playing item on status bar (support most apps; if an app updates the lock screen, it'll probably work)
 Maintainer: softboysxp

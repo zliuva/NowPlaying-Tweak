@@ -1,4 +1,5 @@
 #import "SBStatusBarDataManager.h"
+#import "SBStatusBarStateAggregator.h"
 
 #import <SpringBoard/SBMediaController.h>
 #import <SpringBoard/SBStatusBarTimeView.h>
@@ -14,6 +15,16 @@ static enum TitleType {
 	TITLE_TIME,
 	TITLE_LAST
 } _type = TITLE_TITLE;
+
+static void updateTimeString() {
+	if (%c(SBStatusBarStateAggregator)) {
+		SBStatusBarStateAggregator *stateAggregator = [%c(SBStatusBarStateAggregator) sharedInstance];
+		[stateAggregator _updateTimeItems];
+	} else {
+		SBStatusBarDataManager *dataManager = [objc_getClass("SBStatusBarDataManager") sharedDataManager];
+		[dataManager _updateTimeString];
+	}
+}
 
 static void updateTitle(CFRunLoopTimerRef timer, void *info) {
 	_type = (_type + 1) % TITLE_LAST;
@@ -35,9 +46,7 @@ static void updateTitle(CFRunLoopTimerRef timer, void *info) {
 			break;
 	}
 
-
-	SBStatusBarDataManager *dataManager = [objc_getClass("SBStatusBarDataManager") sharedDataManager];
-	[dataManager _updateTimeString];
+	updateTimeString();
 }
 
 #define UPDATE_INTERVAL 3.7f
@@ -60,29 +69,35 @@ static void stopTimer() {
 	}
 }
 
-%hook SBMediaController
+%group iOS7
+#define IOS7_STATUS_ITEM_TIME_IPHONE 3
+#define IOS7_STATUS_ITEM_TIME_IPAD 4
 
--(void)setNowPlayingInfo:(NSDictionary *)info {
+%hook SBStatusBarStateAggregator
+
+-(void)_updateTimeItems {
 	%orig;
 
-	_info = [info copy];
+	StatusBarData_iOS7 *data = CHIvarRef(self, _data, StatusBarData_iOS7);
 
-	if ([_info[@"playbackRate"] intValue]) {
-		_title = _info[@"title"];
-		if (!_timer) {
-			startTimer();
-		}
+	if (_title) {
+		[_title getCString:data->timeString maxLength:64 encoding:NSUTF8StringEncoding];
 	} else {
-		_title = nil;
-		stopTimer();
+		NSString **actualTime = CHIvarRef(self, _timeItemTimeString, NSString *);
+		[*actualTime getCString:data->timeString maxLength:64 encoding:NSUTF8StringEncoding];
 	}
 
-	SBStatusBarDataManager *dataManager = [objc_getClass("SBStatusBarDataManager") sharedDataManager];
-	[dataManager _updateTimeString];
+	if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+		[self _notifyItemChanged:IOS7_STATUS_ITEM_TIME_IPAD];
+	} else {
+		[self _notifyItemChanged:IOS7_STATUS_ITEM_TIME_IPHONE];
+	}
 }
 
 %end
+%end
 
+%group iOS6
 %hook SBStatusBarDataManager
 
 - (void)_updateTimeString {
@@ -101,4 +116,36 @@ static void stopTimer() {
 }
 
 %end
+%end
 
+%hook SBMediaController
+
+-(void)setNowPlayingInfo:(NSDictionary *)info {
+	%orig;
+
+	_info = [info copy];
+
+	if ([_info[@"playbackRate"] intValue]) {
+		_title = _info[@"title"];
+		if (!_timer) {
+			startTimer();
+		}
+	} else {
+		_title = nil;
+		stopTimer();
+	}
+
+	updateTimeString();
+}
+
+%end
+
+%ctor {
+	%init;
+
+	if (%c(SBStatusBarStateAggregator)) {
+		%init(iOS7);
+	} else {
+		%init(iOS6);
+	}	
+}
